@@ -4,5 +4,5 @@ module.exports = grunt => {
 	});
 
 	grunt.loadTasks('tasks');
-	//grunt.registerTask('default', ['imagemin']);
+	//grunt.registerTask('default', ['trilliantBuild']);
 };
