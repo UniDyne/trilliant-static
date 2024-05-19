@@ -1,7 +1,8 @@
 
 const fs = require('fs'),
     path = require('path');
-const { processSection } = require('markdeeper');
+
+import processSection from markdeeper;
 
 
 /*
