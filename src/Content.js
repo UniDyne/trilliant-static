@@ -1,7 +1,8 @@
 
 const fs = require('fs'),
-    path = require('path'),
-    {processSection} = require('markdeeper');
+    path = require('path');
+
+import {processSection} from 'markdeeper';
 
 /*
     Content is a fancy template. It may start with a header that contains JSON data.
