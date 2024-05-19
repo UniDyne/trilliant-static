@@ -10,7 +10,8 @@
   "license": "ISC",
 
   "dependencies": {
-    "trilliant-webserver": "github:unidyne/trilliant-webserver"
+    "trilliant-webserver": "github:unidyne/trilliant-webserver",
+    "markdeeper": "github:unidyne/markdeeper"
   },
   "optionalDependencies": {
     "trilliant-tedious": "github:unidyne/trilliant-tedious"

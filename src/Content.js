@@ -1,6 +1,7 @@
 
 const fs = require('fs'),
-    path = require('path');
+    path = require('path'),
+    {processSection} = require('markdeeper');
 
 
 /*
@@ -56,7 +57,7 @@ module.exports = class Content {
         /* replace variables */
         var partial = this.data.tmpl.replace(/\{\{([a-z0-9_\.]*)\}\}/gi, (w,g) => (g.replace(/^\s+|\s+$/g,'').split('.').reduce((o,i)=>o[i],data)||w));
 
-        data.content = partial;
+        data.content = data.page.markdown ? processSection(partial).content : partial;
         return data;
     }
 }
