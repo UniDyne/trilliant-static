@@ -2,7 +2,7 @@
 const fs = require('fs'),
     path = require('path');
 
-const markdeeper = await import('markdeeper');
+let markdeeper = null;
 
 
 /*
@@ -58,7 +58,10 @@ module.exports = class Content {
         /* replace variables */
         var partial = this.data.tmpl.replace(/\{\{([a-z0-9_\.]*)\}\}/gi, (w,g) => (g.replace(/^\s+|\s+$/g,'').split('.').reduce((o,i)=>o[i],data)||w));
 
-        if(this.meta.markdown) partial = await markdeeper.processSection(partial);
+        if(this.meta.markdown) {
+            if(!markdeeper) markdeeper = await import('markdeeper');
+            partial = await markdeeper.processSection(partial);
+        }
 
         data.content = partial;
         return data;
