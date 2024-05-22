@@ -2,7 +2,7 @@
 const fs = require('fs'),
     path = require('path');
 
-const markdeeper = require('markdeeper');
+const markdeeper = await import('markdeeper');
 
 
 /*
