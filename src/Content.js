@@ -2,6 +2,8 @@
 const fs = require('fs'),
     path = require('path');
 
+const markdeeper = require('markdeeper');
+
 
 /*
     Content is a fancy template. It may start with a header that contains JSON data.
@@ -55,6 +57,8 @@ module.exports = class Content {
         
         /* replace variables */
         var partial = this.data.tmpl.replace(/\{\{([a-z0-9_\.]*)\}\}/gi, (w,g) => (g.replace(/^\s+|\s+$/g,'').split('.').reduce((o,i)=>o[i],data)||w));
+
+        if(this.meta.markdown) partial = await markdeeper.processSection(partial);
 
         data.content = partial;
         return data;
