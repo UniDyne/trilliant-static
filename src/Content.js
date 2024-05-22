@@ -58,9 +58,9 @@ module.exports = class Content {
         /* replace variables */
         var partial = this.data.tmpl.replace(/\{\{([a-z0-9_\.]*)\}\}/gi, (w,g) => (g.replace(/^\s+|\s+$/g,'').split('.').reduce((o,i)=>o[i],data)||w));
 
-        if(this.meta.markdown) {
+        if(this.data.frontmatter.markdown??false) {
             if(!markdeeper) markdeeper = await import('markdeeper');
-            partial = await markdeeper.processSection(partial);
+            ({ content: partial } = (await markdeeper.processSection(partial)));
         }
 
         data.content = partial;
