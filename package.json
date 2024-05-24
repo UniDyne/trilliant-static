@@ -11,7 +11,7 @@
 
   "dependencies": {
     "trilliant-webserver": "github:unidyne/trilliant-webserver",
-    "markdeeper": "github:unidyne/markdeeper#test"
+    "markdeeper": "github:unidyne/markdeeper"
   },
   "optionalDependencies": {
     "trilliant-tedious": "github:unidyne/trilliant-tedious"
