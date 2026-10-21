@@ -30,35 +30,6 @@ const Filters = {
 };
 
 
-
-/* adapted from @ForbesLindesay */
-function async(makeGenerator) {
-	return function() {
-		var generator = makeGenerator.apply(this, arguments);
-
-		function handle(result) {
-			// generator finished, resolve the promise
-			if(result.done) return Promise.resolve(result.value);
-
-			// generator not finished, move to next
-			return Promise.resolve(result.value).then(function (res) {
-				return handle(generator.next(res));
-			}, function(err) {
-				return handle(generator.throw(err));
-			});
-		}
-		
-		try {
-			return handle(generator.next());
-		} catch(e) {
-			// for synchronous exception
-			return Promise.reject(e);
-		}
-	}
-}
-
-
-
 async function asyncReplace(str, rx, fn) {
 	const promises = [];
 	str.replace(rx, (match, ...args) => {
@@ -104,44 +75,51 @@ function processSegment(tmpl, scope, preserve = false) {
 	});
 
 	// conditional
-	output = output.replace(RX_IFSIMPLE, (w,g,t) => {
-		let x = scopeEval(g);
-		if(x == undefined || x == null || x === false) return preserve ? w : "";
-		if(x.hasOwnProperty('length') && x.length === 0) return preserve ? w : "";
-		return processSegment(t, scope);
-	});
+	let before;
+	do {
+		before = output;
 
-	output = output.replace(RX_IFCOMP, (w,g,c,v,t) => {
-		let x = scopeEval(g), y; // left is always scoped var
-		if(/^".*"$/.test(v) || /^[0-9\.]+$/.test(v))
-			y = JSON.parse(v);
-		else y = scopeEval(V);
+		output = output.replace(RX_IFSIMPLE, (w,g,t) => {
+			let x = scopeEval(g);
+			if(x == undefined || x == null || x === false) return preserve ? maskTags(w) : "";
+			if(x.hasOwnProperty('length') && x.length === 0) return preserve ? maskTags(w) : "";
+			return processSegment(t, scope);
+		});
 
-		let comp = false;
+		output = output.replace(RX_IFCOMP, (w,g,c,v,t) => {
+			let x = scopeEval(g), y; // left is always scoped var
+			if(/^".*"$/.test(v) || /^[0-9\.]+$/.test(v))
+				y = JSON.parse(v);
+			else y = scopeEval(v);
 
-		switch(c) {
-			case '==':
-				comp = x == y;
-				break;
-			case '!=':
-				comp = x != y;
-				break;
-			case '<':
-				comp = x < y;
-				break;
-			case '>':
-				comp = x > y;
-				break;
-			case '<=':
-				comp = x <= y;
-				break;
-			case '>=':
-				comp = x >= y;
-				break;
-		}
+			let comp = false;
 
-		return comp ? processSegment(t, scope) : (preserve ? w : "");
-	});
+			switch(c) {
+				case '==':
+					comp = x == y;
+					break;
+				case '!=':
+					comp = x != y;
+					break;
+				case '<':
+					comp = x < y;
+					break;
+				case '>':
+					comp = x > y;
+					break;
+				case '<=':
+					comp = x <= y;
+					break;
+				case '>=':
+					comp = x >= y;
+					break;
+			}
+
+			return comp ? processSegment(t, scope) : (preserve ? maskTags(w) : "");
+		});
+	} while(output !== before);
+	output = unmaskTags(output);
+	
 
 	// variables
 	output = output.replace(RX_VARS, (w,g,t,f) => {
@@ -249,7 +227,7 @@ exports.procTemplate = function procTemplate(file, scope) {
 	return tmpl.process(scope);
 }
 
-exports.procWidgets = function prodWidgets(str, scope) {
+exports.procWidgets = function procWidgets(str, scope) {
 	return asyncReplace(str, RX_WIDGET, async (w,g,a) => {
 		if(Widgets[g]) {
 			let args = {scope:scope};
