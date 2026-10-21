@@ -8,10 +8,14 @@ const {Cache} = require('./Cache');
 // change template cache to have max size, use as queue
 const TMPL_CACHE_SIZE = 8;
 
+const maskTags = w => w.replace(/\{%(IF|ENDIF)\b/g, '{%\u0001$1');
+const unmaskTags = w => w.replace(/\{%\u0001/g, '{%');
+
+
 // Template processing regex
 const RX_EACH = /\{%EACH\s+([A-Za-z0-9_\.]*)\s*\}(.*?)\{%ENDEACH\}/sg;
-const RX_IFSIMPLE = /\{%IF\s+([A-Za-z0-9_\.]*)\s*\}(.*?)\{%ENDIF\}/sg;
-const RX_IFCOMP = /\{%IF\s+([A-Za-z0-9_\.]*)\s*(==|>=|<=|!=)\s*([A-Za-z0-9_\."]*)\s*}(.*?)\{%ENDIF\}/sg;
+const RX_IFSIMPLE = /\{%IF\s+([A-Za-z0-9_\.]*)\s*\}((?:(?!\{%IF\s)[\s\S])*?)\{%ENDIF\}/g;
+const RX_IFCOMP = /\{%IF\s+([A-Za-z0-9_\.]*)\s*(==|>=|<=|!=|<|>)\s*([A-Za-z0-9_\."]*)\s*}((?:(?!\{%IF\s)[\s\S])*?)\{%ENDIF\}/g;
 const RX_VARS = /\{\{\s*([a-z0-9_\.]*)\s*(\|\s*([a-z0-9_]+)\s*)?\}\}/gi;
 const RX_WIDGET = /\{\{\$\s*([a-z0-9_\.]*)\s*([\w =":\.\/]+)?\$\}\}/gi;
 const RX_WIDGET_ARGS = /\s*(\w+)="([\w \.\-\/\:]+?)"\s*/gi;
@@ -111,7 +115,7 @@ function processSegment(tmpl, scope, preserve = false) {
 		let x = scopeEval(g), y; // left is always scoped var
 		if(/^".*"$/.test(v) || /^[0-9\.]+$/.test(v))
 			y = JSON.parse(v);
-		else y = scopeEval(g);
+		else y = scopeEval(V);
 
 		let comp = false;
 
