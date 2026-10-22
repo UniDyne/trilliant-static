@@ -63,12 +63,13 @@ exports.Cache = class Cache extends EventEmitter {
         @return {any} The item removed from cache or null if not present.
     */
     flush(id) {
+        // 261022-DB : test for the key, not the value, so falsy entries are flushed too
+        if(!this.Entries.has(id)) return null;
+
         var item = this.Entries.get(id);
-        if(item) {
-            var i = this.Index.findIndex(e => e==id);
-            if(i >= 0) this.Index.splice(i, 1);
-            this.Entries.delete(id);
-        }
+        var i = this.Index.findIndex(e => e==id);
+        if(i >= 0) this.Index.splice(i, 1);
+        this.Entries.delete(id);
         return item;
     }
 }

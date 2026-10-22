@@ -4,6 +4,9 @@ const fs = require('fs'),
 const Content = require('../src/Content'),
     { addFilter, addWidget, procTemplate, procWidgets } = require('../src/Template');
 
+// 261022-DB : Only these files in content_dir are built. .xht is preferred.
+const CONTENT_EXTS = ['.xht', '.htm', '.md'];
+
 module.exports = function(grunt) {
     grunt.registerTask('trilliantBuild', 'Build pages from templates.', buildTemplates);
 };
@@ -45,13 +48,19 @@ function buildTemplates() {
         const filepath = path.join(contentDir, files[i]);
         const st = fs.statSync(filepath);
         if(st.isDirectory()) continue;
+        if(!CONTENT_EXTS.includes(path.extname(files[i]).toLowerCase())) continue;
 
         contents.push( new Content(filepath, st) );
     }
     
-    processContent(contents, cfg).then(() => {
+    // 261022-DB : Always release SQL and finish the task, even on failure,
+    //     otherwise grunt hangs and the error is lost as an unhandled rejection.
+    processContent(contents, cfg).then(() => true, e => {
+        console.error(e && e.stack || e);
+        return false;
+    }).then(ok => {
         if(global.SQL) global.SQL.stop();
-        done();
+        done(ok);
     });
 }
 
@@ -65,9 +74,9 @@ async function processContent(contents, cfg) {
         out = await procWidgets(out, data);
         
         // 261021-DB : ensure directory exists - default to original "www" if not defined
-        const outdir = path.join(process.cwd(), cfg.ouput_dir ?? 'www'); 
-        fs.mkdirSync(outdir);
-        fs.writeFileSync(outdir, basename.replace(ext,'')+'.html'), out);
+        const outdir = path.join(process.cwd(), cfg.output_dir ?? 'www'); 
+        if(!fs.existsSync(outdir)) fs.mkdirSync(outdir,{recursive:true});
+        fs.writeFileSync(path.join(outdir, path.basename(c.filepath, ext)+'.html'), out);
     };
 
     const promises = contents.map(proc);

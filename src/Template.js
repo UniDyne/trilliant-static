@@ -8,6 +8,13 @@ const {Cache} = require('./Cache');
 // change template cache to have max size, use as queue
 const TMPL_CACHE_SIZE = 8;
 
+// Normalise a template file path: absolute, with default extension. Used for
+// both loading and cache keys so every lookup agrees.
+const tmplPath = p => {
+	if(!(/\.[a-z]{3,4}$/i).test(p)) p = `${p}.xht`;
+	return path.resolve(p);
+};
+
 const maskTags = w => w.replace(/\{%(IF|ENDIF)\b/g, '{%\u0001$1');
 const unmaskTags = w => w.replace(/\{%\u0001/g, '{%');
 
@@ -16,16 +23,16 @@ const unmaskTags = w => w.replace(/\{%\u0001/g, '{%');
 // 261021-DB : Relaxed widget args, added nesting to IF
 const RX_EACH = /\{%EACH\s+([A-Za-z0-9_\.]*)\s*\}(.*?)\{%ENDEACH\}/sg;
 const RX_IFSIMPLE = /\{%IF\s+([A-Za-z0-9_\.]*)\s*\}((?:(?!\{%IF\s)[\s\S])*?)\{%ENDIF\}/g;
-const RX_IFCOMP = /\{%IF\s+([A-Za-z0-9_\.]*)\s*(==|>=|<=|!=|<|>)\s*([A-Za-z0-9_\."]*)\s*}((?:(?!\{%IF\s)[\s\S])*?)\{%ENDIF\}/g;
-const RX_VARS = /\{\{\s*([a-z0-9_\.]*)\s*(\|\s*([a-z0-9_]+)\s*)?\}\}/gi;
-const RX_WIDGET = /\{\{\$\s*([a-z0-9_\.]*)\s*([\w =":\.\/]+)?\$\}\}/gi;
+const RX_IFCOMP = /\{%IF\s+([A-Za-z0-9_\.]*)\s*(==|>=|<=|!=|<|>)\s*("[^"]*"|-?[A-Za-z0-9_\.]+)\s*}((?:(?!\{%IF\s)[\s\S])*?)\{%ENDIF\}/g;
+const RX_VARS = /\{\{\s*([a-z0-9_\.]+)\s*(\|\s*([a-z0-9_]+)\s*)?\}\}/gi;
+const RX_WIDGET = /\{\{\$\s*([a-z0-9_\.]*)\s*([\w =":\.\/\-]+)?\$\}\}/gi;
 const RX_WIDGET_ARGS = /\s*(\w+)="([\w \.\-\/\:]+?)"\s*/gi;
 
 const TemplateCache = new Cache(TMPL_CACHE_SIZE);
 
 
 const Filters = {
-	fixed: v => (0+v).toFixed(2),
+	fixed: v => Number(v).toFixed(2),
 	integer: v => parseInt(v),
 	json: v => JSON.stringify(v, null, 0)
 };
@@ -59,7 +66,7 @@ function processSegment(tmpl, scope, preserve = false) {
         scope = { value: scope };
 
 	// scope evaluator
-	var scopeEval = str => str.replace(/^\s+|\s+$/g,'').split('.').reduce((o,i) => i==='' ? o : o ? o[i] ?? undefined : o, scope);
+	var scopeEval = str => str.replace(/^\s+|\s+$/g,'').split('.').reduce((o,i) => i==='' ? o : o != null ? o[i] : o, scope);
 
 	// iterators
 	output = output.replace(RX_EACH, (w,g,t) => {
@@ -90,8 +97,12 @@ function processSegment(tmpl, scope, preserve = false) {
 
 		output = output.replace(RX_IFCOMP, (w,g,c,v,t) => {
 			let x = scopeEval(g), y; // left is always scoped var
-			if(/^".*"$/.test(v) || /^[0-9\.]+$/.test(v))
-				y = JSON.parse(v);
+			// right side: quoted string, number, true/false/null, else a scoped var
+			if(/^".*"$/.test(v)) y = v.slice(1, -1);
+			else if(/^-?\d+(\.\d+)?$/.test(v)) y = Number(v);
+			else if(v === 'true') y = true;
+			else if(v === 'false') y = false;
+			else if(v === 'null') y = null;
 			else y = scopeEval(v);
 
 			let comp = false;
@@ -150,7 +161,7 @@ function processSegment(tmpl, scope, preserve = false) {
 	engine is for templating rather implementing logic. As such, this engine
 	uses RegEx rather than implementing a lexer / parser.
 */
-exports.Template = Template = class Template {
+const Template = exports.Template = class Template {
 	/**
 		Create template. If tmplstr parameter starts with ':', it is
 		assumed to be a file path. The template will be loaded from file
@@ -164,17 +175,15 @@ exports.Template = Template = class Template {
 	*/
 	constructor(tmplstr) {
 		if(tmplstr.substr(0,1) == ':') {
-			// check for file extension - add xht if there is not one
-			if(!(/\.[a-z]{3,4}$/gi).test(tmplstr)) tmplstr = `${tmplstr}.xht`;
-			this.filename = tmplstr.substr(1);
+			// absolute path, with xht added if there is no extension
+			this.filename = tmplPath(tmplstr.substr(1));
 			this.dirname = path.dirname(this.filename);
 
-			this.tmpl = fs.readFileSync(tmplstr.substr(1), 'utf8');
+			this.tmpl = fs.readFileSync(this.filename, 'utf8');
 
-			// 261021-DB : Make cache entry match full path
-			//    Fixes cache miss in process() and ensures duplicate
-			//    templates in other directories do not overwrite
-			TemplateCache.set(path.join(this.dirname, this.filename), this);
+			// 261022-DB : Cache key is the normalised absolute path, which
+			//    is also what process() and procTemplate() look up.
+			TemplateCache.set(this.filename, this);
 		} else {
 			this.tmpl = tmplstr;
 
@@ -197,10 +206,11 @@ exports.Template = Template = class Template {
 			var filename = g.replace(/^\s+|\s+$/g,'');
 			/* if the filename is a variable, process variable */
 			if(filename.startsWith('$')) filename = filename.replace(/^\$/,'').split('.').reduce((o,i) => o[i], scope);
-			let filepath = path.join(this.dirname, `${filename}.xht`);
+			// 261022-DB : includes are relative to the including template
+			let filepath = tmplPath(path.join(this.dirname, filename));
 			
 			var tmpl = TemplateCache.get(filepath);
-			if(tmpl == null) tmpl = new Template(`:${filename}`);
+			if(tmpl == null) tmpl = new Template(`:${filepath}`);
 			return tmpl.process(scope);
 		});
 
@@ -225,7 +235,7 @@ exports.Template = Template = class Template {
 */
 exports.procTemplate = function procTemplate(file, scope) {
 	var dirname = process.cwd();
-	var filename = path.join(dirname, "tmpl", file);
+	var filename = tmplPath(path.join(dirname, "tmpl", file));
 	
 	var tmpl = TemplateCache.get(filename);
 	if(tmpl == null) tmpl = new Template(`:${filename}`);
