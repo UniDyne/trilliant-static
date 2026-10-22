@@ -13,6 +13,7 @@ const unmaskTags = w => w.replace(/\{%\u0001/g, '{%');
 
 
 // Template processing regex
+// 261021-DB : Relaxed widget args, added nesting to IF
 const RX_EACH = /\{%EACH\s+([A-Za-z0-9_\.]*)\s*\}(.*?)\{%ENDEACH\}/sg;
 const RX_IFSIMPLE = /\{%IF\s+([A-Za-z0-9_\.]*)\s*\}((?:(?!\{%IF\s)[\s\S])*?)\{%ENDIF\}/g;
 const RX_IFCOMP = /\{%IF\s+([A-Za-z0-9_\.]*)\s*(==|>=|<=|!=|<|>)\s*([A-Za-z0-9_\."]*)\s*}((?:(?!\{%IF\s)[\s\S])*?)\{%ENDIF\}/g;
@@ -75,6 +76,7 @@ function processSegment(tmpl, scope, preserve = false) {
 	});
 
 	// conditional
+	// 261021-DB : Allow for nested IF statements by moving preserved ones out-of-band
 	let before;
 	do {
 		before = output;
@@ -169,7 +171,10 @@ exports.Template = Template = class Template {
 
 			this.tmpl = fs.readFileSync(tmplstr.substr(1), 'utf8');
 
-			TemplateCache.set(this.filename, this);
+			// 261021-DB : Make cache entry match full path
+			//    Fixes cache miss in process() and ensures duplicate
+			//    templates in other directories do not overwrite
+			TemplateCache.set(path.join(this.dirname, this.filename), this);
 		} else {
 			this.tmpl = tmplstr;
 
@@ -192,9 +197,9 @@ exports.Template = Template = class Template {
 			var filename = g.replace(/^\s+|\s+$/g,'');
 			/* if the filename is a variable, process variable */
 			if(filename.startsWith('$')) filename = filename.replace(/^\$/,'').split('.').reduce((o,i) => o[i], scope);
-			filename = path.join(this.dirname, filename);
+			let filepath = path.join(this.dirname, `${filename}.xht`);
 			
-			var tmpl = TemplateCache.get(filename);
+			var tmpl = TemplateCache.get(filepath);
 			if(tmpl == null) tmpl = new Template(`:${filename}`);
 			return tmpl.process(scope);
 		});

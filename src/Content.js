@@ -20,7 +20,8 @@ function loadData(filepath, meta) {
 
     let raw = fs.readFileSync(filepath, 'utf8');
 
-    let fm = raw.match(/^---\{?([\s\S]*?)\}?---$/m);
+    // 261021-DB : Removed /m so frontmatter MUST be aligned with start of file
+    let fm = raw.match(/^---\{?([\s\S]*?)\}?---$/);
     if(fm) try {
         let jdat = fm[0].replace(/^---\{?/,'{').replace(/\}?---$/,'}');
         //jdat = jdat.replace(/(['"])?([a-z0-9_$]+)(['"])?:/gi, '"$2": ');
@@ -54,9 +55,20 @@ module.exports = class Content {
                 file: this.data.meta
             }
         );
+
+        var scopeEval = str => str.replace(/^\s+|\s+$/g,'').split('.').reduce((o,i) => i==='' ? o : o ? o[i] ?? undefined : o, data);
         
         /* replace variables */
-        var partial = this.data.tmpl.replace(/\{\{([a-z0-9_\.]*)\}\}/gi, (w,g) => (g.replace(/^\s+|\s+$/g,'').split('.').reduce((o,i)=>o[i],data)||w));
+        // 261021-DB : This is only a partial. No filter support here (see Template).
+        //     Also, vars that cannot be mapped are left in place for template pass.
+        //     Not a bug. Behaviour as intended. This pass is only for meta / page vars.
+        //     Fixed scope eval so bad dotted vars pass through.
+        var partial = this.data.tmpl.replace(/\{\{([a-z0-9_\.]*)\}\}/gi, (w,g) => {
+            let v = scopeEval(g);
+            if(v == undefined) return w;
+		    if(v == null) return '';
+            return v;
+        });
 
         if(this.data.frontmatter.markdown??false) {
             if(!markdeeper) markdeeper = await import('markdeeper');

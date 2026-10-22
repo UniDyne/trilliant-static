@@ -26,7 +26,7 @@ function buildTemplates() {
     }
     
     
-    addFilter('slug', x => x.toLowerCase().replace(/^\s+|\s$/g,'').replace(/[^\w]/g,'-').replace(/-{2,}/g,'-') );
+    addFilter('slug', x => x.toLowerCase().replace(/^\s+|\s+$/g,'').replace(/[^\w]/g,'-').replace(/-{2,}/g,'-') );
 
     // needs to load from a KNOWN directory set in config...
     // change this so this task can be separated
@@ -64,7 +64,10 @@ async function processContent(contents, cfg) {
         let out = procTemplate(data.page.template, data);
         out = await procWidgets(out, data);
         
-        fs.writeFileSync(path.join(process.cwd(), 'www', basename.replace(ext,'')+'.html'), out);
+        // 261021-DB : ensure directory exists - default to original "www" if not defined
+        const outdir = path.join(process.cwd(), cfg.ouput_dir ?? 'www'); 
+        fs.mkdirSync(outdir);
+        fs.writeFileSync(outdir, basename.replace(ext,'')+'.html'), out);
     };
 
     const promises = contents.map(proc);

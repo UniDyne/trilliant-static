@@ -44,12 +44,15 @@ exports.Cache = class Cache extends EventEmitter {
         @return {any} The entry is returned so this call may be chained.
     */
     set(id, entry) {
+        // 261021-DB : Fix duplicate key bug (Index would have both)
+        if(this.Entries.has(id)) this.flush(id);
+
         this.Entries.set(id, entry);
         this.Index.push(id);
         while(this.Index.length > this.CACHE_SIZE) {
-            var id = this.Index.shift();
-            this.emit('deref', id, this.Entries.get(id));
-            this.Entries.delete(id);
+            let old = this.Index.shift();
+            this.emit('deref', old, this.Entries.get(old));
+            this.Entries.delete(old);
         }
         return entry;
     }
